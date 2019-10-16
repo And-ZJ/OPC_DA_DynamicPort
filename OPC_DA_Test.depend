@@ -1,0 +1,39 @@
+# depslib dependency file v1.0
+1570864881 source:d:\project\codeblockproject\opcdatest\main.c
+	<stdio.h>
+	<string.h>
+	<assert.h>
+	<malloc.h>
+
+1571052200 source:c:\users\win\desktop\opcdatest\main.c
+	<stdio.h>
+	<string.h>
+	<assert.h>
+	<malloc.h>
+	"dce_rpc_protocol.h"
+	"my_pr_debug_control.h"
+
+1571130591 source:c:\users\win\desktop\opcdatest\dce_rpc_protocol.c
+	"dce_rpc_protocol.h"
+	"my_pr_debug_control.h"
+	<linux/ip.h>
+	<linux/ctype.h>
+
+1571052230 c:\users\win\desktop\opcdatest\dce_rpc_protocol.h
+
+1571136614 c:\users\win\desktop\opcdatest\my_pr_debug_control.h
+	<stdio.h>
+
+1571217481 source:e:\code\c\opc_da_test\main.c
+	<stdio.h>
+	<string.h>
+	<assert.h>
+	<malloc.h>
+	"conntrak_opc_da/dce_rpc_protocol.h"
+	"conntrak_opc_da/my_pr_debug_control.h"
+
+1571217732 e:\code\c\opc_da_test\conntrak_opc_da\dce_rpc_protocol.h
+
+1571245560 e:\code\c\opc_da_test\conntrak_opc_da\my_pr_debug_control.h
+	<stdio.h>
+
