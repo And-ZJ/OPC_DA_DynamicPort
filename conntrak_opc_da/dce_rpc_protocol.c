@@ -8,7 +8,7 @@ const char *CONST_MEOW = "\x4d\x45\x4f\x57";
 
 #ifdef __linux__
 #include <linux/ip.h>
-#include <linux/ctype.h>
+//#include <linux/ctype.h>
 #else
 static unsigned short ntohs(unsigned short num)
 {
@@ -187,20 +187,10 @@ unsigned char searchOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,u
         }
     }
 
-
     if(isDynamicPort == 1 && inBraceFlag == 0) //说明已经找到动态端口
     {
         *matchOff = braceStart;
-        *matchLen = braceEnd - braceStart + 1;
-
-        printf("%d\n",*matchLen);
-        for (unsigned int i =braceStart; i< braceStart + *matchLen; ++i )
-        {
-            printf("%x ",dataAddr[i]);
-        }
-        printf("\n");
-
-
+        *matchLen = braceEnd - braceStart +1;
     }
     else
     {

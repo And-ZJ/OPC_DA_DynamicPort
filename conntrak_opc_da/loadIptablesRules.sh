@@ -14,3 +14,4 @@ iptables -A FORWARD -p tcp -m state --state NEW --dport 135 -j ACCEPT
 iptables -A FORWARD -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 #iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -m helper --helper opc -p tcp -j ACCEPT
 
+#iptables -A PREROUTING -t raw -p tcp -j CT --helper opc

@@ -382,6 +382,7 @@ static const struct nf_conntrack_expect_policy opc_exp_policy =
 
 static void __exit nf_conntrack_opc_fini(void)
 {
+    printk("unregister nf_conntrack_opc");
     nf_conntrack_helpers_unregister(opc, ports_c * 2);
     kfree(opc_buffer);
 }
@@ -414,11 +415,11 @@ static int __init nf_conntrack_opc_init(void)
     ret = nf_conntrack_helpers_register(opc, ports_c * 2);
     if (ret < 0)
     {
-        pr_err("failed to register helpers\n");
+        printk("failed to register nf_conntrack_opc\n");
         kfree(opc_buffer);
         return ret;
     }
-
+    printk("register nf_conntrack_opc");
     return 0;
 }
 
