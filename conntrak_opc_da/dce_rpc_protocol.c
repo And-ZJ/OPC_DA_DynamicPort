@@ -187,10 +187,20 @@ unsigned char searchOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,u
         }
     }
 
+
     if(isDynamicPort == 1 && inBraceFlag == 0) //说明已经找到动态端口
     {
         *matchOff = braceStart;
-        *matchLen = braceEnd - braceStart;
+        *matchLen = braceEnd - braceStart + 1;
+
+        printf("%d\n",*matchLen);
+        for (unsigned int i =braceStart; i< braceStart + *matchLen; ++i )
+        {
+            printf("%x ",dataAddr[i]);
+        }
+        printf("\n");
+
+
     }
     else
     {
@@ -209,7 +219,7 @@ unsigned short parseOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,u
     unsigned short temp = 1;
     unsigned int i =0;
 
-    for(i = matchOff + matchLen -1; i > matchOff ; i--)
+    for(i = matchOff + matchLen -2; i > matchOff ; i--)
     {
         if(dataAddr[i] != '\x00')
         {

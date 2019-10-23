@@ -21,6 +21,8 @@
 
 #ifdef __linux__
 
+#include <linux/module.h>
+
 #ifndef KERN_DEBUG
 #define KERN_DEBUG ""
 #endif // KERN_DEBUG
