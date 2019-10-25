@@ -32,9 +32,6 @@
 			<Add option="-Wall" />
 			<Add option="-ansi" />
 		</Compiler>
-		<Unit filename="AssertTools.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Unit filename="AssertTools.h" />
 		<Unit filename="BytesTools.c">
 			<Option compilerVar="CC" />
