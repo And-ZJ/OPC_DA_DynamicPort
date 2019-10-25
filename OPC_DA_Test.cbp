@@ -30,15 +30,40 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
+			<Add option="-ansi" />
 		</Compiler>
+		<Unit filename="AssertTools.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="AssertTools.h" />
+		<Unit filename="BytesTools.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="BytesTools.h" />
 		<Unit filename="conntrak_opc_da/dce_rpc_protocol.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="conntrak_opc_da/dce_rpc_protocol.h" />
 		<Unit filename="conntrak_opc_da/my_pr_debug_control.h" />
+		<Unit filename="conntrak_opc_da/segments.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="conntrak_opc_da/segments.h" />
+		<Unit filename="imitate.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="imitate.h" />
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="test_port.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="test_port.h" />
+		<Unit filename="test_segments.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="test_segments.h" />
 		<Extensions>
 			<code_completion />
 			<envvars />
