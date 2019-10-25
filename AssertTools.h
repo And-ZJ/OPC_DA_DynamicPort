@@ -3,6 +3,7 @@
 
 #include "BytesTools.h"
 
+// judge (const char *) bytes with bytes length
 #define assertBytesEqual( bytes1, bytesLen1, bytes2, bytesLen2) \
 { \
     if (!isEqualBytes( (bytes1) , (bytesLen1) , (bytes2) , (bytesLen2) )) \
@@ -15,7 +16,8 @@
     } \
 }
 
-#define assertIntergerEqual( i1 , i2 ) \
+// judge integer(char, short, int, long, long long)
+#define assertIntegerEqual( i1 , i2 ) \
 { \
     long long int1 = (long long) (i1); \
     long long int2 = (long long) (i2); \
@@ -27,7 +29,8 @@
     } \
 }
 
-#define assertUIntergerEqual( i1 , i2 ) \
+// judge unsigned integer(char, short, int, long, long long)
+#define assertUIntegerEqual( i1 , i2 ) \
 { \
     unsigned long long uint1 = (unsigned long long) (i1); \
     unsigned long long uint2 = (unsigned long long) (i2); \
@@ -39,6 +42,7 @@
     } \
 }
 
+// judge pointer
 #define assertPtrEqual(p1, p2) \
 { \
     if ( (const char *) (p1) != (const char *) (p2)) \
