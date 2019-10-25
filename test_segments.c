@@ -6,8 +6,7 @@
 extern char *segmentsBuffer;
 extern struct TcpSegments;
 extern struct TcpSegments *virtualSegmentsPtr;
-
-unsigned char segptrSize = sizeof(struct TcpSegments);
+extern const unsigned char segStructSize;
 
 static void displayTcpSegments(struct TcpSegments *ptr)
 {
@@ -389,7 +388,7 @@ void test_segments_3()
     assertUIntergerEqual(virtualSegmentsPtr->next->next->seq_h,0xff445566); // check it is t2
     assertUIntergerEqual(virtualSegmentsPtr->next->next->dataOffset, 11); // t2 data store offset 11
 
-    rst = tryStoreNewTcpData(t2.seq_h, t2.ack, t2.fragLen, t2.appData, t2.appLen);
+    rst = tryStoreNewTcpData(t3.seq_h, t3.ack, t3.fragLen, t3.appData, t3.appLen);
     assert(rst == 0);  // t3 store fail
 
     rst = tryStoreNewTcpData(t4.seq_h, t4.ack, t4.fragLen, t4.appData, t4.appLen);

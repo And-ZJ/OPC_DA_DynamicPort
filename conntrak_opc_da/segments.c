@@ -6,8 +6,9 @@
 #define SEGMENTS_BUFFER_LEN 65536
 #define MAX_SAVED_COUNT 10
 
-char *segmentsBuffer=0;
-unsigned int MAX_STORED_LEN = SEGMENTS_BUFFER_LEN; // it should be const, and unsigned short not stored 65536
+const unsigned char segStructSize = sizeof(struct TcpSegments);
+char *segmentsBuffer=0; // store the tcp segments data
+unsigned int MAX_STORED_LEN = SEGMENTS_BUFFER_LEN; // unsigned short not stored 65536
 
 struct TcpSegments *virtualSegmentsPtr;
 
