@@ -11,7 +11,7 @@
 #define DCERPC_LETTLE_ENDIAN 16
 #define DCERPC_BIG_ENDIAN 0
 
-#define DCE_RPC_PORT	135
+#define DCE_RPC_PORT 135
 
 #define UUID_UNKNOWN_TYPE  0
 #define UUID_TYPE_IActivationPropertiesIn   1
@@ -30,31 +30,17 @@ struct DceRpcHeader
     unsigned int id;
 };
 
-unsigned char isDceRpcProtocol(const char *dataAddr,unsigned int dataLen,unsigned int start, unsigned int *offset, struct DceRpcHeader **dceHdr)
+#ifdef __linux__
+#include <linux/ip.h>
+//#include <linux/ctype.h>
+#else
+unsigned short ntohs(unsigned short num);
+unsigned int ntohl(unsigned int num);
+#endif // __linux__
+
+
+unsigned char tryDceRpcProtocolAndMatchDynamicPort(unsigned int seq_h, unsigned int ack, const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *matchOffPtr,unsigned int *matchLenPtr, unsigned short *dynamicPortPtr)
 ;
 
-unsigned char searchDceRpcUuid(const char *dataAddr,unsigned int dataLen,unsigned int start,unsigned int *offset, unsigned int *uuidOff)
-;
-
-unsigned int identifyUuidType(const char *dataAddr,unsigned int dataLen,unsigned int uuidOffset,const struct DceRpcHeader *dceHeader)
-;
-
-unsigned char searchOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,unsigned int start, unsigned int *matchOff,unsigned int *matchLen)
-;
-
-unsigned short parseOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,unsigned int matchOff, unsigned long matchLen)
-;
-
-unsigned char tryDceRpcProtocolAndType(const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *offset,int *dceRpcType)
-;
-
-void printUuidType(int uuidType)
-;
-
-unsigned char tryMatchDynamicPort(const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *matchOffPtr,unsigned int *matchLenPtr, unsigned short *dynamicPortPtr)
-;
-
-unsigned char tryDceRpcProtocolAndMatchDynamicPort(const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *matchOffPtr,unsigned int *matchLenPtr, unsigned short *dynamicPortPtr)
-;
 
 #endif // _DCE_RPC_PROTOCOL_H

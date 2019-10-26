@@ -41,6 +41,7 @@ MODULE_ALIAS_NFCT_HELPER("opc");
 
 #include "my_pr_debug_control.h"
 #include "dce_rpc_protocol.h"
+#include "segments.h"
 
 /* This is slow, but it's simple. --RR */
 static char *opc_buffer;
@@ -165,6 +166,9 @@ static int help(struct sk_buff *skb,
 
     unsigned short opcDaDynamicPort = 0;
 
+    unsigned int seq_h = 0;
+    unsigned int ack = 0;
+
     typeof(nf_nat_opc_hook) nf_nat_opc;
 
 
@@ -239,8 +243,11 @@ skip_nl_seq:
         th->dest
     );
 
-    // add
-    found = tryDceRpcProtocolAndMatchDynamicPort(fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
+    //pr_debug("dataLen(%u)\n",datalen);
+
+    seq_h = ntohl(th->seq);
+    ack = th->ack;
+    found = tryDceRpcProtocolAndMatchDynamicPort(seq_h, ack, fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
 
     if (found == 1)
     {
@@ -384,6 +391,7 @@ static void __exit nf_conntrack_opc_fini(void)
 {
     printk("unregister nf_conntrack_opc");
     nf_conntrack_helpers_unregister(opc, ports_c * 2);
+    segments_fini();
     kfree(opc_buffer);
 }
 
@@ -396,6 +404,11 @@ static int __init nf_conntrack_opc_init(void)
     opc_buffer = kmalloc(65536, GFP_KERNEL);
     if (!opc_buffer)
         return -ENOMEM;
+
+    if (!segments_init())
+    {
+        return -ENOMEM;
+    }
 
     if (ports_c == 0)
         ports[ports_c++] = OPC_PORT;
@@ -417,6 +430,7 @@ static int __init nf_conntrack_opc_init(void)
     {
         printk("failed to register nf_conntrack_opc\n");
         kfree(opc_buffer);
+        segments_fini();
         return ret;
     }
     printk("register nf_conntrack_opc");

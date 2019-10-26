@@ -3,46 +3,42 @@
 
 #include "my_pr_debug_control.h"
 
+// the 4 bytes times.
 struct TcpSegments
 {
     struct TcpSegments *prev;
     struct TcpSegments *next;
     unsigned int seq_h; // host bytes
     unsigned int ack; // network bytes
-    unsigned short dataOffset;
+    unsigned int dataOffset;
     unsigned short dataLen;
     unsigned short fragLen;
-    unsigned char deleteMark:1,
+    unsigned int deleteMark:1,
+             isOccpied:1,
              isHead:1,
-             count:6;
+             count:8;
 };
 
+// unsigned short not stored 65536
+#define SEGMENTS_BUFFER_LEN 65536
+#define MAX_SAVED_COUNT 10
 
 // attempt to store the new data
 // step 0: return result if check it has stored
 // step 1: find a new place to store if have enough place
 // TODO: step 2: if step 1 failed, find the max count ptr and delete it, then try step 1 again
 // step 3: return the result
-int tryStoreNewTcpData(unsigned int seq_h,unsigned int ack,unsigned int fragLen, const char *appData,unsigned short appLen)
-;
+int tryStoreTcpData(unsigned int seq_h,unsigned int ack,unsigned int fragLen, const char *appData,unsigned short appLen);
 
-// step 0: return result if check it has stored
-// step 1: find the existed segments head. if failed, don't store.
-// step 2: find a appropriate place to store if it belongs to a existed segments.
-// step 3: return the result
-int tryStoreAndAssembleNewTcpData(unsigned int seq_h,unsigned ack, const char *appData, unsigned int appLen )
-;
+unsigned char tryAssembleTcpData(unsigned int *seq_h,const char **tcpDataPtr,unsigned short *dataLen);
 
-unsigned char getAssembleTcpData(const char **tcpDataPtr,unsigned short *dataLen)
-;
+void updateAndDeleteStore(void);
 
+void markDeleteByUpdate(void);
 
-void updateAndDeleteSegmentsStore()
-;
+void deleteAllMarkedStore(void);
 
-int segments_init()
-;
+int segments_init(void);
 
-int segments_fini()
-;
+int segments_fini(void);
 #endif // _SEGMENTS_H

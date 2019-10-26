@@ -1,16 +1,14 @@
 #include "dce_rpc_protocol.h"
 #include "my_pr_debug_control.h"
+#include "segments.h"
 
 const char *IID_IActivationPropertiesIn = "\xa2\x01\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46";
 const char *IID_IActivationPropertiesOut = "\xa3\x01\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46";
 
 const char *CONST_MEOW = "\x4d\x45\x4f\x57";
 
-#ifdef __linux__
-#include <linux/ip.h>
-//#include <linux/ctype.h>
-#else
-static unsigned short ntohs(unsigned short num)
+#ifndef __linux__
+unsigned short ntohs(unsigned short num)
 {
     union
     {
@@ -26,6 +24,24 @@ static unsigned short ntohs(unsigned short num)
     else
     {
         return ((((num) & 0xff00) >> 8) | (((num) & 0x00ff) << 8));
+    }
+}
+unsigned int ntohl(unsigned int num)
+{
+    union
+    {
+        unsigned long int i;
+        unsigned char s[4];
+    } c;
+    c.i = 0x12345678;
+    //判断本机字节序,本机为大端则直接返回，为小端则将网络的大端转为小端
+    if(0x12 == c.s[0])
+    {
+        return num;
+    }
+    else
+    {
+        return ( (((num) & 0x000000ff) << 24) | (((num) & 0x0000ff00) << 8)  | (((num) & 0x00ff0000) >> 8) | (((num) & 0xff000000) >> 24) );
     }
 }
 #endif // __linux__
@@ -56,10 +72,10 @@ static int isEqualBytes(const char *b1,unsigned int l1, const char *b2, unsigned
     return 1;
 }
 
-// 返回0表示不是
-// 返回1表示是
-// start 是相对 dataAddr 的偏移，可指示本函数 在 此偏移之后做操作，offset 是 搜索结束后的偏移，返回回去可用于指示其他函数在本偏移之后做操作。
-unsigned char isDceRpcProtocol(const char *dataAddr,unsigned int dataLen,unsigned int start, unsigned int *offset, struct DceRpcHeader **dceHdr)
+// 返回0表示不能识别
+// 返回1表示是dce rpc 完整包
+// 返回-1表示是 dce rpc 的 tcp segments head 包
+int identityDceRpcHead(const char *dataAddr,unsigned int dataLen,unsigned int start, unsigned int *offset,  struct DceRpcHeader **dceHdr)
 {
     unsigned short len;
     struct DceRpcHeader *dceHeader = 0;
@@ -67,12 +83,15 @@ unsigned char isDceRpcProtocol(const char *dataAddr,unsigned int dataLen,unsigne
     const short appDataLen = dataLen - start;
 
     *dceHdr = 0;
-    if (appDataLen < (int)sizeof(struct DceRpcHeader)) return 0;
+    if (appDataLen < (int)sizeof(struct DceRpcHeader))
+    {
+        return 0;
+    }
     dceHeader = (struct DceRpcHeader *)appDataAddr;
-
-    if (dceHeader->version != 5) return 0;
-    if (dceHeader->minor_version > 1) return 0;
-    if (dceHeader->type > 19) return 0;
+    if (dceHeader->version != 5 || dceHeader->minor_version > 1 || dceHeader->type > 19)
+    {
+        return 0;
+    }
     if (dceHeader->drep[0] & DCERPC_LETTLE_ENDIAN)
     {
         len = dceHeader->frag_length;
@@ -81,11 +100,16 @@ unsigned char isDceRpcProtocol(const char *dataAddr,unsigned int dataLen,unsigne
     {
         len = ntohs(dceHeader->frag_length);
     }
-    if (len < (int)sizeof(struct DceRpcHeader)) return 0;
-    if (appDataLen < len) return 0;
-
+    if (len < (int)sizeof(struct DceRpcHeader))
+    {
+        return 0;
+    }
     *offset = start + (unsigned int)sizeof(struct DceRpcHeader);
     *dceHdr = dceHeader;
+    if (appDataLen < len)
+    {
+        return -1;
+    }
     return 1;
 }
 
@@ -221,42 +245,6 @@ unsigned short parseOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,u
     return dynamicPort;
 }
 
-unsigned char tryDceRpcProtocolAndType(const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *offset,int *dceRpcType)
-{
-    unsigned int dceOffset = 0;
-    struct DceRpcHeader *dceRpcHdr = 0;
-    unsigned char isDceRpcPacket = 0;
-    unsigned char isFindUuid = 0;
-    unsigned int uuidOffset = 0;
-    unsigned int uuidType = 0;
-
-    isDceRpcPacket = isDceRpcProtocol(dataAddr,dataLen, dceOffset, &dceOffset,&dceRpcHdr);
-
-    if (!isDceRpcPacket)
-    {
-        // Accept, although it is not dce rpc packet. May be other protocol communication.
-        pr_debug("Not DCE RPC\n");
-        return 0;
-    }
-
-    isFindUuid = searchDceRpcUuid(dataAddr,dataLen,dceOffset,&dceOffset,&uuidOffset);
-
-    if (!isFindUuid)
-    {
-        pr_debug("Find UUID failed\n");
-        return 0;
-    }
-    uuidType = identifyUuidType(dataAddr,dataLen,uuidOffset,dceRpcHdr);
-    if (uuidType == UUID_UNKNOWN_TYPE)
-    {
-        pr_debug("UUID unknown\n");
-        return 0;
-    }
-    *offset = dceOffset;
-    *dceRpcType = uuidType;
-    return 1;
-}
-
 void printUuidType(int uuidType)
 {
     if (uuidType == UUID_UNKNOWN_TYPE)
@@ -313,30 +301,94 @@ unsigned char tryMatchDynamicPort(const char *dataAddr,unsigned int dataLen, uns
 
 }
 
-unsigned char tryDceRpcProtocolAndMatchDynamicPort(const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *matchOffPtr,unsigned int *matchLenPtr, unsigned short *dynamicPortPtr)
+unsigned char tryDceRpcProtocolAndMatchDynamicPort(unsigned int seq_h, unsigned int ack, const char *dataAddr,unsigned int dataLen, unsigned int start,unsigned int *matchOffPtr,unsigned int *matchLenPtr, unsigned short *dynamicPortPtr)
 {
-    unsigned int offset = 0;
     unsigned int matchOff = 0;
     unsigned int matchLen = 0;
     unsigned short dynamicPort = 0;
     unsigned char isDcerpcPacket = 0;
     unsigned char isGotDynamicPort = 0;
-    int dceRpcType = 0;
-    isDcerpcPacket =  tryDceRpcProtocolAndType(dataAddr,dataLen, offset,&offset,&dceRpcType);
 
-    if (isDcerpcPacket)
+    unsigned int dceOffset = 0;
+    struct DceRpcHeader *dceRpcHdr = 0;
+    unsigned char isFindUuid = 0;
+    unsigned int uuidOffset = 0;
+    unsigned int uuidType = 0;
+
+
+    int rst = 0;
+
+    unsigned int assembledHeadSeq_h = seq_h;
+    const char *assembledTcpData = 0;
+    unsigned short assembledTcpDataLen = 0;
+
+    rst = identityDceRpcHead(dataAddr, dataLen, dceOffset, &dceOffset,&dceRpcHdr);
+    updateAndDeleteStore();
+    if (rst == 1)
     {
-        printUuidType(dceRpcType);
-        if (dceRpcType == UUID_TYPE_IActivationPropertiesOut)
+        isDcerpcPacket = 1;
+    }
+    else if (rst == 0) // cannot match, try to store this packet as segments
+    {
+        rst = tryStoreTcpData(seq_h,ack,0,dataAddr,dataLen);
+        pr_debug("Seg save (%u) %d\n",dataLen,rst);
+        if (rst == 1)
         {
-            isGotDynamicPort = tryMatchDynamicPort(dataAddr,dataLen,offset,&matchOff,&matchLen,&dynamicPort);
+            rst = tryAssembleTcpData(&assembledHeadSeq_h,&assembledTcpData,&assembledTcpDataLen);
+            if (rst == 1) // assemble success
+            {
+                rst = identityDceRpcHead(assembledTcpData,assembledTcpDataLen, dceOffset, &dceOffset,&dceRpcHdr);
+                if (rst == 1)
+                {
+                    dataAddr = assembledTcpData;
+                    dataLen = assembledTcpDataLen;
+                    isDcerpcPacket = 1;
+                }
+            }
         }
+    }
+    else if (rst == -1) // match the dcerpc head, just try to store it
+    {
+        rst = tryStoreTcpData(seq_h,ack,dceRpcHdr->frag_length,dataAddr,dataLen);
+        pr_debug("Seg save (%u,%u) %d\n",dceRpcHdr->frag_length,dataLen,rst);
+    }
+    if (!isDcerpcPacket)
+    {
+        return 0;
+    }
+
+    isFindUuid = searchDceRpcUuid(dataAddr,dataLen,dceOffset,&dceOffset,&uuidOffset);
+
+    if (!isFindUuid)
+    {
+        pr_debug("Find UUID failed\n");
+        return 0;
+    }
+    uuidType = identifyUuidType(dataAddr,dataLen,uuidOffset,dceRpcHdr);
+    if (uuidType == UUID_UNKNOWN_TYPE)
+    {
+        pr_debug("UUID unknown\n");
+        return 0;
+    }
+    printUuidType(uuidType);
+    if (uuidType == UUID_TYPE_IActivationPropertiesOut)
+    {
+        isGotDynamicPort = tryMatchDynamicPort(dataAddr,dataLen,dceOffset,&matchOff,&matchLen,&dynamicPort);
     }
     if (isGotDynamicPort)
     {
-        *matchOffPtr = matchOff;
+        if (matchOff < seq_h - assembledHeadSeq_h)
+        {
+            *matchOffPtr = 0;
+        }
+        else
+        {
+            *matchOffPtr = matchOff - (seq_h - assembledHeadSeq_h);
+        }
+
         *matchLenPtr = matchLen;
         *dynamicPortPtr = dynamicPort;
+        deleteAllMarkedStore();
         return 1;
     }
     return 0;

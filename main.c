@@ -6,7 +6,7 @@
 int main()
 {
     test_segments();
-//    test();
+    test();
     printf("Test Finish!\n");
     return 0;
 }

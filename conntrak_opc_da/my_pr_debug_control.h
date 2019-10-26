@@ -29,8 +29,11 @@
 #ifndef pr_fmt
 #define pr_fmt(fmt) fmt
 #endif // pr_fmt
+
+#ifndef pr_debug
 #define pr_debug(fmt, ...) \
 		printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__) // In linux.
+#endif // pr_debug
 
 #else // other system, like windows
 

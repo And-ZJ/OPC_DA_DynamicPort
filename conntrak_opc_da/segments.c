@@ -1,16 +1,31 @@
+#ifdef __linux__
+#include <linux/slab.h>
+#include <linux/string.h>
+#else
+#include <malloc.h>
 #include <string.h>
+#define GFP_KERNEL 0
+static void *kmalloc(unsigned int size, int flags)
+{
+    return malloc(size);
+}
+static void kfree(void *objp){
+    free(objp);
+}
+#endif // __linux__
 
 #include "segments.h"
-#include "malloc.h"
 
-#define SEGMENTS_BUFFER_LEN 65536
-#define MAX_SAVED_COUNT 10
+/**
+    segmentsBuffer
+    store data at begin
+    store the pointer at end.
+*/
+char *segmentsBuffer=0; // store the tcp segments data
+struct TcpSegments *virtualSegmentsPtr; // manage the tcp segments objects, the linked list head
 
 const unsigned char segStructSize = sizeof(struct TcpSegments);
-char *segmentsBuffer=0; // store the tcp segments data
-unsigned int MAX_STORED_LEN = SEGMENTS_BUFFER_LEN; // unsigned short not stored 65536
 
-struct TcpSegments *virtualSegmentsPtr;
 
 static void displayTcpSegments(struct TcpSegments *ptr)
 {
@@ -30,6 +45,40 @@ static void displayTcpSegments(struct TcpSegments *ptr)
         pr_debug("\tisHead = %d\n",ptr->isHead);
         pr_debug("\tcount = %d\n",ptr->count);
     }
+}
+
+// data occpied at buffer[1,offset)
+unsigned int getDataOccpiedOffset(void)
+{
+    struct TcpSegments *ptr = virtualSegmentsPtr->next;
+    unsigned int offset = virtualSegmentsPtr->dataOffset + virtualSegmentsPtr->dataLen;
+    while (ptr)
+    {
+        if (ptr->isHead)
+        {
+            offset = ptr->dataOffset + ptr->fragLen;
+        }
+        ptr = ptr->next;
+    }
+    return offset;
+}
+
+// pointer occpied at buffer[offset,SEGMENTS_BUFFER_LEN]
+unsigned int getPtrOccpiedOffset(void)
+{
+    struct TcpSegments *ptr = virtualSegmentsPtr;
+    unsigned int offset = SEGMENTS_BUFFER_LEN;
+    unsigned int distance = 0;
+    while (ptr)
+    {
+        distance = (unsigned int)ptr - (unsigned int)segmentsBuffer;
+        if (distance < offset)
+        {
+            offset = distance;
+        }
+        ptr = ptr->next;
+    }
+    return offset;
 }
 
 // get a stored segments ptr with same seq_h and ack
@@ -52,10 +101,10 @@ struct TcpSegments *getStoredSegments(struct TcpSegments *ptr,unsigned int seq_h
 // length != 0
 // failed, return 0
 // success, return the data offset position
-unsigned short findEnoughPlaceToStore(unsigned short length)
+unsigned int findEmptyDataBufferOffset(unsigned int maxOffset, unsigned short length)
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
-    unsigned short offset = virtualSegmentsPtr->dataOffset + virtualSegmentsPtr->dataLen; // offset == 1
+    unsigned int offset = virtualSegmentsPtr->dataOffset + virtualSegmentsPtr->dataLen; // offset == 1
     while (ptr)
     {
         if (ptr->isHead)
@@ -72,15 +121,37 @@ unsigned short findEnoughPlaceToStore(unsigned short length)
 
         ptr = ptr->next;
     }
-    if (MAX_STORED_LEN-offset >= length)
+    if (maxOffset - offset >= length)
     {
         return offset;
     }
     return 0;
 }
 
+// return SEGMENTS_BUFFER_LEN, not find
+// return ptr, find a empty buffer to store a new segments ptr
+unsigned int findEmptyPtrBufferOffset(unsigned int maxOffset)
+{
+    unsigned int offset = SEGMENTS_BUFFER_LEN;
+    struct TcpSegments *lastPtr = (struct TcpSegments *)( segmentsBuffer + SEGMENTS_BUFFER_LEN - segStructSize);
+    while (lastPtr)
+    {
+        offset = (unsigned int)lastPtr - (unsigned int)segmentsBuffer;
+        if (!lastPtr->isOccpied && offset >= maxOffset)
+        {
+            break;
+        }
+        --lastPtr;
+    }
+    if (offset > maxOffset)
+    {
+        return offset;
+    }
+    return SEGMENTS_BUFFER_LEN;
+};
+
 // insert the new segments in linked list, the element's dataOffset is ascended
-unsigned char insertSegments(struct TcpSegments *newSegments)
+unsigned char insertSegmentsToLinkedList(struct TcpSegments *newSegments)
 {
     struct TcpSegments *prev = virtualSegmentsPtr;
     struct TcpSegments *curr = virtualSegmentsPtr->next;
@@ -108,30 +179,23 @@ unsigned char insertSegments(struct TcpSegments *newSegments)
 }
 
 // generate segment to store and insert it into linked list, copy bytes to buffer
-unsigned char storeTcpDataAsSegments(unsigned short storeOffset,unsigned int seq_h, unsigned int ack, unsigned short fragLen, const char *appData, unsigned short appLen)
+unsigned char store(unsigned int ptrStoreOffset,unsigned int dataStoreOffset,unsigned int seq_h, unsigned int ack, unsigned short fragLen, const char *appData, unsigned short appLen)
 {
-    struct TcpSegments *newSegments = (struct TcpSegments *) malloc(sizeof(struct TcpSegments));
+    struct TcpSegments *newSegments = (struct TcpSegments *) (segmentsBuffer + ptrStoreOffset);
     newSegments->prev = 0;
     newSegments->next = 0;
     newSegments->seq_h = seq_h;
     newSegments->ack = ack;
-    newSegments->dataOffset = storeOffset;
+    newSegments->dataOffset = dataStoreOffset;
     newSegments->dataLen = appLen;
     newSegments->fragLen = fragLen;
     newSegments->deleteMark = 0;
-    if (fragLen != 0)
-    {
-        newSegments->isHead = 1;
-    }
-    else
-    {
-        newSegments->isHead = 0;
-    }
-
+    newSegments->isOccpied = 1;
+    newSegments->isHead = (fragLen != 0);
     newSegments->count = 0;
-    if (insertSegments(newSegments)==1)
+    if (insertSegmentsToLinkedList(newSegments)==1)
     {
-        memcpy(segmentsBuffer+storeOffset,appData,appLen);
+        memcpy(segmentsBuffer+dataStoreOffset,appData,appLen);
         return 1;
     }
     pr_debug("insertSegments Failed.\n");
@@ -143,40 +207,14 @@ unsigned char storeTcpDataAsSegments(unsigned short storeOffset,unsigned int seq
 //};
 
 
+
+
 // attempt to store the new data
 // step 0: return result if check it has stored
 // step 1: find a new place to store if have enough place
 // TODO: step 2: if step 1 failed, find the max count ptr and delete it, then try step 1 again
 // step 3: return the result
-int tryStoreNewTcpData(unsigned int seq_h,unsigned int ack,unsigned int fragLen, const char *appData,unsigned short appLen)
-{
-    struct TcpSegments *ptr = virtualSegmentsPtr->next;
-    unsigned short emptyOffset =0;
-//    struct TcpSegments *maxCountPtr = 0;
-    int rst = 0; // store failed.
-    if (!getStoredSegments(ptr,seq_h,ack))
-    {
-        emptyOffset = findEnoughPlaceToStore(fragLen);
-//        if (emptyOffset == 0)
-//        {
-//            maxCountPtr = findMaxCountPtr(ptr);
-//            if (maxCountPtr != 0)
-//            {
-//                deleteOneSegments(maxCountPtr);
-//                emptyOffset = findEnoughPlaceToStore(appLen);
-//            }
-//        }
-        if (emptyOffset != 0)
-        {
-            rst = storeTcpDataAsSegments(emptyOffset,seq_h,ack,fragLen,appData,appLen);
-        }
-    }
-    else
-    {
-        rst = -1; // stored
-    }
-    return rst; // rst == 1: success
-}
+
 
 struct TcpSegments *findStoredSegmentsHead(struct TcpSegments *ptr, unsigned int ack)
 {
@@ -191,15 +229,52 @@ struct TcpSegments *findStoredSegmentsHead(struct TcpSegments *ptr, unsigned int
     return 0;
 }
 
-// step 0: return result if check it has stored
-// step 1: find the existed segments head. if failed, don't store.
-// step 2: find a appropriate place to store if it belongs to a existed segments.
-// step 3: return the result
-int tryStoreAndAssembleNewTcpData(unsigned int seq_h,unsigned ack, const char *appData, unsigned int appLen )
+int tryStoreAsSegmentsHead(unsigned int seq_h,unsigned int ack,unsigned int fragLen, const char *appData,unsigned short appLen)
+{
+    struct TcpSegments *ptr = virtualSegmentsPtr->next;
+    unsigned int emptyDataOffset =0;
+    unsigned int emptyPtrOffset = 0;
+    unsigned int ptrOccpiedOffset = 0;
+    unsigned int dataOccpiedOffset = 0;
+    int rst = 0; // store failed
+    if (!getStoredSegments(ptr,seq_h,ack))
+    {
+        dataOccpiedOffset = getDataOccpiedOffset();
+        emptyPtrOffset = findEmptyPtrBufferOffset(dataOccpiedOffset);
+        if (emptyPtrOffset != SEGMENTS_BUFFER_LEN)
+        {
+            ptrOccpiedOffset = getPtrOccpiedOffset();
+            ptrOccpiedOffset = ptrOccpiedOffset < emptyPtrOffset? ptrOccpiedOffset: emptyPtrOffset;
+            emptyDataOffset = findEmptyDataBufferOffset(ptrOccpiedOffset,fragLen);
+            if (emptyDataOffset != 0)
+            {
+                rst = store(emptyPtrOffset,emptyDataOffset,seq_h,ack,fragLen,appData,appLen);
+            }
+            else
+            {
+                rst = 0;
+            }
+
+        }
+        else
+        {
+            rst = 0; // no enough space
+        }
+    }
+    else
+    {
+        rst = -1; // repeat stored
+    }
+    return rst; // rst == 1: success
+}
+
+int tryStoreAsSegments(unsigned int seq_h,unsigned int ack, const char *appData, unsigned int appLen)
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
     struct TcpSegments *head = 0;
-    unsigned short storeOffset =0;
+    unsigned int storeOffset =0;
+    unsigned int emptyPtrOffset = 0;
+    unsigned int dataOccpiedOffset = 0;
     int rst = 0; // store failed.
     head = findStoredSegmentsHead(ptr,ack);
     if (head)
@@ -211,41 +286,80 @@ int tryStoreAndAssembleNewTcpData(unsigned int seq_h,unsigned ack, const char *a
                 storeOffset = seq_h - head->seq_h + head->dataOffset;
                 if (storeOffset > 0 && storeOffset + appLen <= head->dataOffset + head->fragLen)
                 {
-                    rst = storeTcpDataAsSegments(storeOffset,seq_h,ack,0,appData,appLen);
+                    // 应校验 storeOffset + appLen 与 下一个 不冲突
+                    dataOccpiedOffset = getDataOccpiedOffset();
+                    emptyPtrOffset = findEmptyPtrBufferOffset(dataOccpiedOffset);
+                    if (emptyPtrOffset != SEGMENTS_BUFFER_LEN)
+                    {
+                        rst = store(emptyPtrOffset,storeOffset,seq_h,ack,0,appData,appLen);
+                    }
+                    else
+                    {
+                        rst = 0;
+                    }
+
                 }
                 else
                 {
                     pr_debug("Length error");
+                    rst = -3;
                 }
             }
             else
             {
                 pr_debug("Seq error\n");
+                rst = -4;
             }
         }
         else
         {
-            rst = -1; // stored.
+            rst = -1; // repeat stored.
         }
 
     }
     else
     {
-        rst =  -2; // not stored.
+        rst =  -2; // not stored because no segments head.
     }
     return rst; // rst == 1: success
 }
 
-// return the next element if delete success, or return 0
-struct TcpSegments *deleteOneSegments(struct TcpSegments *ptr)
+// step 0: return result if check it has stored
+// step 1: find the existed segments head. if failed, don't store.
+// step 2: find a appropriate place to store if it belongs to a existed segments.
+// step 3: return the result
+//int tryStoreNewTcpDataAndAssemble(unsigned int seq_h,unsigned int ack, const char *appData, unsigned int appLen )
+//{
+//
+//}
+
+
+int tryStoreTcpData(unsigned int seq_h,unsigned int ack,unsigned int fragLen, const char *appData,unsigned short appLen)
 {
+    int rst =0;
+    if (fragLen != 0)
+    {
+        rst = tryStoreAsSegmentsHead(seq_h,ack,fragLen,appData,appLen);
+    }
+    else
+    {
+        rst = tryStoreAsSegments(seq_h,ack,appData,appLen);
+    }
+    return rst;
+}
+
+// return the next element if delete success, or return 0
+struct TcpSegments *deleteThisSegments(struct TcpSegments *ptr)
+{
+    struct TcpSegments *prev =0;
+    struct TcpSegments *next =0;
     if (ptr == 0)
     {
         pr_debug("Attempt to delete 0 ptr\n");
         return 0;
     }
-    struct TcpSegments *prev = ptr->prev;
-    struct TcpSegments *next = ptr->next;
+    prev = ptr->prev;
+    next = ptr->next;
     if (prev)
     {
         prev->next = next;
@@ -255,11 +369,11 @@ struct TcpSegments *deleteOneSegments(struct TcpSegments *ptr)
         next->prev = prev;
     }
     memset(segmentsBuffer + ptr->dataOffset,0,ptr->dataLen);
-    free(ptr);
+    memset(ptr,0,segStructSize);
     return next;
 }
 
-void markAssembleSegmentsDelete(struct TcpSegments *ptr)
+void markDeleteBySegmentsHead(struct TcpSegments *ptr)
 {
     unsigned int ack = 0;
     if (ptr && ptr->isHead)
@@ -282,7 +396,7 @@ void markAssembleSegmentsDelete(struct TcpSegments *ptr)
     }
 }
 
-void updateCountAndMarkSegments()
+void markDeleteByUpdate()
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
     while (ptr)
@@ -292,20 +406,20 @@ void updateCountAndMarkSegments()
             ++ptr->count;
             if (ptr->count >= MAX_SAVED_COUNT)
             {
-                markAssembleSegmentsDelete(ptr);
+                markDeleteBySegmentsHead(ptr);
             }
         }
         ptr = ptr->next;
     }
 }
 
-unsigned char checkCompleteAndMark(struct TcpSegments *ptr)
+unsigned char isCouldAssembled(struct TcpSegments *ptr)
 {
-    unsigned short offset = 0;
-    unsigned short end = 0;
+    unsigned int offset = 0;
+    unsigned int end = 0;
     struct TcpSegments * assembleHead = ptr;
     unsigned int ack =0;
-    unsigned char rst = 0; // not found
+    unsigned char rst = 0; // current ptr could not be assembled
     if (assembleHead && assembleHead->isHead)
     {
         offset = assembleHead->dataOffset + assembleHead->dataLen;
@@ -327,23 +441,19 @@ unsigned char checkCompleteAndMark(struct TcpSegments *ptr)
             }
             ptr = ptr->next;
         }
-        if (rst)
-        {
-            markAssembleSegmentsDelete(assembleHead);
-        }
     }
 
     return rst;
 }
 
-struct TcpSegments *findCompleteAssembledSegments()
+struct TcpSegments *findCompleteAssembledSegments(void)
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
     while(ptr)
     {
         if (ptr->isHead)
         {
-            if (checkCompleteAndMark(ptr))
+            if (isCouldAssembled(ptr))
             {
                 return ptr;
             }
@@ -353,28 +463,32 @@ struct TcpSegments *findCompleteAssembledSegments()
     return 0;
 }
 
-unsigned char getAssembleTcpData(const char **tcpDataPtr,unsigned short *dataLen)
+// only attempt assemble tcp data once
+unsigned char tryAssembleTcpData(unsigned int *seq_h, const char **tcpDataPtr,unsigned short *dataLen)
 {
     struct TcpSegments * assembleHead = findCompleteAssembledSegments();
     if (assembleHead==0)
     {
+        *seq_h = 0;
         *tcpDataPtr = 0;
         *dataLen = 0;
         return 0;
     }
+    markDeleteBySegmentsHead(assembleHead);
+    *seq_h = assembleHead->seq_h;
     *tcpDataPtr = segmentsBuffer + assembleHead->dataOffset;
     *dataLen = assembleHead->fragLen;
     return 1;
 }
 
-void deleteAllMarkedSegments()
+void deleteAllMarkedStore(void)
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
     while (ptr)
     {
         if (ptr->deleteMark)
         {
-            ptr = deleteOneSegments(ptr);
+            ptr = deleteThisSegments(ptr);
         }
         else
         {
@@ -383,20 +497,27 @@ void deleteAllMarkedSegments()
     }
 }
 
-void updateAndDeleteSegmentsStore()
+void updateAndDeleteStore(void)
 {
-    updateCountAndMarkSegments();
-    deleteAllMarkedSegments();
+    markDeleteByUpdate();
+    deleteAllMarkedStore();
 }
 
-int segments_init()
+int segments_init(void)
 {
-    segmentsBuffer = malloc(SEGMENTS_BUFFER_LEN);
-    virtualSegmentsPtr = (struct TcpSegments *) malloc(sizeof(struct TcpSegments));
-    if (!segmentsBuffer || !virtualSegmentsPtr)
+    unsigned int ptrStoreOffset = 0;
+    segmentsBuffer = kmalloc(SEGMENTS_BUFFER_LEN, GFP_KERNEL);
+    if (!segmentsBuffer)
     {
         return 0;
     }
+    memset(segmentsBuffer,0,SEGMENTS_BUFFER_LEN);
+    ptrStoreOffset = findEmptyPtrBufferOffset(1);
+    if (ptrStoreOffset == SEGMENTS_BUFFER_LEN)
+    {
+        return 0;
+    }
+    virtualSegmentsPtr = (struct TcpSegments *)(segmentsBuffer + ptrStoreOffset);
     virtualSegmentsPtr->prev = 0;
     virtualSegmentsPtr->next = 0;
     virtualSegmentsPtr->seq_h = 0;
@@ -405,15 +526,15 @@ int segments_init()
     virtualSegmentsPtr->dataLen = 1;
     virtualSegmentsPtr->fragLen = 0;
     virtualSegmentsPtr->count = 0;
-    virtualSegmentsPtr->isHead = 0;
     virtualSegmentsPtr->deleteMark = 0;
-    memset(segmentsBuffer,0,SEGMENTS_BUFFER_LEN);
+    virtualSegmentsPtr->isOccpied = 1;
+    virtualSegmentsPtr->isHead = 0;
+    virtualSegmentsPtr->count = 0;
     return 1;
 }
 
-int segments_fini()
+int segments_fini(void)
 {
-    free(segmentsBuffer);
-    free(virtualSegmentsPtr);
+    kfree(segmentsBuffer);
     return 1;
 }

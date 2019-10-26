@@ -1,6 +1,6 @@
 
 obj-m += my_nf_conntrack_opc.o
-my_nf_conntrack_opc-objs = nf_conntrack_opc.o dce_rpc_protocol.o
+my_nf_conntrack_opc-objs = nf_conntrack_opc.o dce_rpc_protocol.o segments.o
 
 # obj-m += my_nf_nat_ftp.o
 # my_nf_nat_ftp-objs = nf_nat_ftp.o

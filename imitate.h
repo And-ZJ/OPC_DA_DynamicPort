@@ -7,5 +7,7 @@ int imitate_help(const char *ethernetAddr,unsigned int ethernetLen,
                  unsigned int tcpDataStart,
                  unsigned short *opcDaDynamicPortAddr);
 
+int imitate_init();
+int imitate_fini();
 
 #endif // _IMITATE_H
