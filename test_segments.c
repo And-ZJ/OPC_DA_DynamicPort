@@ -386,7 +386,7 @@ void test_segments_2()
 void test_segments_3()
 {
     pr_debug("TEST SEGMENTS %d\n",testNum++);
-    segments_init();
+    assert(segments_init());
 
     int rst = 0;
 
@@ -432,7 +432,7 @@ void test_segments_3()
 void test_segments_4()
 {
     pr_debug("TEST SEGMENTS %d\n",testNum++);
-    segments_init();
+    assert(segments_init());
 
     int rst = 0;
     /** Test the buffer space not enough **/
@@ -453,7 +453,7 @@ void test_segments_4()
 void test_segments_5()
 {
     pr_debug("TEST SEGMENTS %d\n",testNum++);
-    segments_init();
+    assert(segments_init());
 
     int rst = 0;
     unsigned int seq_h = 0;
@@ -499,6 +499,43 @@ void test_segments_5()
     assert(segments_fini());
 }
 
+void test_segments_6()
+{
+    pr_debug("TEST SEGMENTS %d\n",testNum++);
+    assert(segments_init());
+
+    int rst = 0;
+    unsigned int seq_h = 0;
+    const char *tcpData = 0;
+    unsigned short dataLen = 0;
+
+    /** Test the wrong pos */
+    struct TcpTest t1 = {100, 0xaabbaabb,"abcd", 4, 8};
+    struct TcpTest t2 = {100, 0xaabbaabb,"efgh", 4, 0};
+    struct TcpTest t3 = {99, 0xaabbaabb,"ijkl", 4, 0};
+    /** Test the wrong length */
+    struct TcpTest t4 = {104, 0xaabbaabb,"mnopq", 5, 0};
+    /** Test the wrong pos */
+    struct TcpTest t5 = {103, 0xaabbaabb,"mnopq", 5, 0};
+
+    rst = tryStoreTcpData(t1.seq_h, t1.ack, t1.fragLen, t1.appData, t1.appLen);
+    assert(rst == 1);  // t1 store success
+
+    rst = tryStoreTcpData(t2.seq_h, t2.ack, t2.fragLen, t2.appData, t2.appLen);
+    assert(rst == -1);  // t2 store failed  repeat store
+
+    rst = tryStoreTcpData(t3.seq_h, t3.ack, t3.fragLen, t3.appData, t3.appLen);
+    assertIntegerEqual(rst,-3);  // t3 store failed  seq error
+
+    rst = tryStoreTcpData(t4.seq_h, t4.ack, t4.fragLen, t4.appData, t4.appLen);
+    assert(rst == -4);  // t4 store failed  length error
+
+    rst = tryStoreTcpData(t5.seq_h, t5.ack, t5.fragLen, t5.appData, t5.appLen);
+    assertIntegerEqual(rst,-5);  // t5 store failed  pos conflict
+
+    assert(segments_fini());
+}
+
 void test_segments()
 {
     assert(segStructSize%4 == 0);
@@ -507,5 +544,6 @@ void test_segments()
     test_segments_3();
     test_segments_4();
     test_segments_5();
+    test_segments_6();
 }
 

@@ -9,7 +9,8 @@ static void *kmalloc(unsigned int size, int flags)
 {
     return malloc(size);
 }
-static void kfree(void *objp){
+static void kfree(void *objp)
+{
     free(objp);
 }
 #endif // __linux__
@@ -95,6 +96,49 @@ struct TcpSegments *getStoredSegments(struct TcpSegments *ptr,unsigned int seq_h
         ptr = ptr->next;
     }
     return 0;
+}
+
+// check the segments store to the segments head conflict
+// seq should be ascend
+// length should appropriate
+int checkStoreSegmentsNoConflict(struct TcpSegments *head,unsigned int seq_h, unsigned int dataStoreOffset, unsigned short length)
+{
+    struct TcpSegments *prev = head;
+    struct TcpSegments *curr = prev->next;
+    if (head == 0 || !head->isHead)
+    {
+        return 0;
+    }
+    if (seq_h <= head->seq_h)
+    {
+        return -3; // Seq error
+    }
+    if (dataStoreOffset <= 0 || !(dataStoreOffset + length <= head->dataOffset + head->fragLen))
+    {
+        return -4; // length error
+    }
+    if (!(prev->dataOffset + prev->dataLen <= dataStoreOffset))
+    {
+        return -5;// pos conflict
+    }
+    while (curr)
+    {
+        if (prev->dataOffset + prev->dataLen <= dataStoreOffset && dataStoreOffset + length <= curr->dataOffset)
+        {
+            return 1; // no conflict
+        }
+        if (curr->isHead)
+        {
+            return -5;// pos conflict
+        }
+        prev = curr;
+        curr = prev->next;
+    }
+    if (curr == 0)
+    {
+        return 1; // no conflict
+    }
+    return -5;
 }
 
 // find a empty place to store
@@ -202,20 +246,6 @@ unsigned char store(unsigned int ptrStoreOffset,unsigned int dataStoreOffset,uns
     return 0;
 }
 
-//struct TcpSegments* findMaxCountPtr(){
-//
-//};
-
-
-
-
-// attempt to store the new data
-// step 0: return result if check it has stored
-// step 1: find a new place to store if have enough place
-// TODO: step 2: if step 1 failed, find the max count ptr and delete it, then try step 1 again
-// step 3: return the result
-
-
 struct TcpSegments *findStoredSegmentsHead(struct TcpSegments *ptr, unsigned int ack)
 {
     while (ptr)
@@ -229,6 +259,12 @@ struct TcpSegments *findStoredSegmentsHead(struct TcpSegments *ptr, unsigned int
     return 0;
 }
 
+
+// attempt to store the new data as tcp segments head
+// step 0: return result if check it has stored
+// step 1: find a new place to store if have enough place
+// TODO: step 2: if step 1 failed, find the max count ptr and delete it, then try step 1 again
+// step 3: return the result
 int tryStoreAsSegmentsHead(unsigned int seq_h,unsigned int ack,unsigned int fragLen, const char *appData,unsigned short appLen)
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
@@ -248,26 +284,23 @@ int tryStoreAsSegmentsHead(unsigned int seq_h,unsigned int ack,unsigned int frag
             emptyDataOffset = findEmptyDataBufferOffset(ptrOccpiedOffset,fragLen);
             if (emptyDataOffset != 0)
             {
-                rst = store(emptyPtrOffset,emptyDataOffset,seq_h,ack,fragLen,appData,appLen);
+                rst = store(emptyPtrOffset,emptyDataOffset,seq_h,ack,fragLen,appData,appLen); // rst == 1: success
             }
-            else
-            {
-                rst = 0;
-            }
-
-        }
-        else
-        {
-            rst = 0; // no enough space
         }
     }
     else
     {
         rst = -1; // repeat stored
     }
-    return rst; // rst == 1: success
+    return rst;
 }
 
+// attempt to store the new data as a segments
+// step 0: return -2 if cannot find the segments head.
+// step 1: return -1 if check it has stored
+// step 2: check the parameter of segments with head
+// step 2: find a appropriate place to store if have enough place
+// step 3: return the result
 int tryStoreAsSegments(unsigned int seq_h,unsigned int ack, const char *appData, unsigned int appLen)
 {
     struct TcpSegments *ptr = virtualSegmentsPtr->next;
@@ -281,34 +314,20 @@ int tryStoreAsSegments(unsigned int seq_h,unsigned int ack, const char *appData,
     {
         if (!getStoredSegments(head,seq_h,ack))
         {
-            if (head->seq_h < seq_h)
+            storeOffset = seq_h - head->seq_h + head->dataOffset;
+            rst = checkStoreSegmentsNoConflict(head,seq_h,storeOffset,appLen);
+            if (rst == 1)
             {
-                storeOffset = seq_h - head->seq_h + head->dataOffset;
-                if (storeOffset > 0 && storeOffset + appLen <= head->dataOffset + head->fragLen)
+                dataOccpiedOffset = getDataOccpiedOffset();
+                emptyPtrOffset = findEmptyPtrBufferOffset(dataOccpiedOffset);
+                if (emptyPtrOffset != SEGMENTS_BUFFER_LEN)
                 {
-                    // 应校验 storeOffset + appLen 与 下一个 不冲突
-                    dataOccpiedOffset = getDataOccpiedOffset();
-                    emptyPtrOffset = findEmptyPtrBufferOffset(dataOccpiedOffset);
-                    if (emptyPtrOffset != SEGMENTS_BUFFER_LEN)
-                    {
-                        rst = store(emptyPtrOffset,storeOffset,seq_h,ack,0,appData,appLen);
-                    }
-                    else
-                    {
-                        rst = 0;
-                    }
-
+                    rst = store(emptyPtrOffset,storeOffset,seq_h,ack,0,appData,appLen);
                 }
                 else
                 {
-                    pr_debug("Length error");
-                    rst = -3;
+                    rst = 0;
                 }
-            }
-            else
-            {
-                pr_debug("Seq error\n");
-                rst = -4;
             }
         }
         else

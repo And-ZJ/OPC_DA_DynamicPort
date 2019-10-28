@@ -30,7 +30,7 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
-			<Add option="-ansi" />
+			<Add option="-std=c99" />
 		</Compiler>
 		<Unit filename="AssertTools.h" />
 		<Unit filename="BytesTools.c">

@@ -2,8 +2,10 @@
 
 void displayBytesInHexChars(const void *bytes,unsigned int length)
 {
+    unsigned int i=0;
     const unsigned char *b = (const unsigned char *)bytes;
-    for (unsigned int i=0; i<length; ++i)
+
+    for (i=0; i<length; ++i)
     {
         printf("%02x ",b[i]&0xFF);
     }
@@ -12,19 +14,20 @@ void displayBytesInHexChars(const void *bytes,unsigned int length)
 
 int isEqualBytes(const void *bytes1,unsigned int bytesLen1,const void *bytes2,unsigned int bytesLen2)
 {
+    unsigned int i=0;
+    const unsigned char *b1 = (const unsigned char*)bytes1;
+    const unsigned char *b2 = (const unsigned char*)bytes2;
     if (bytesLen1 != bytesLen2)
     {
         return 0;
     }
-    const unsigned char *b1 = (const unsigned char*)bytes1;
-    const unsigned char *b2 = (const unsigned char*)bytes2;
     if ( b1 == b2 ){
         return 1;
     }
     if (b1 == NULL || b2 == NULL){
         return 0;
     }
-    for (unsigned int i=0; i<bytesLen1; ++i)
+    for (i=0; i<bytesLen1; ++i)
     {
         if ((b1[i]&0xFF) != (b2[i]&0xFF))
         {
@@ -93,10 +96,11 @@ unsigned int readableHexCharsToUInt(const char *hexCharsHeadPtr)
 // "05000203" --> "\x05\x00\x02\x03"
 unsigned int readableHexStreamToBytes(const char *stream, unsigned int streamLen, char **hexBytes)
 {
+    unsigned int i=0;
     assert(streamLen % 2 == 0);
     unsigned int bytesLen = streamLen / 2;
     char *bytes = (char *) malloc(streamLen);
-    for (unsigned int i=0; i<bytesLen; ++i)
+    for (i=0; i<bytesLen; ++i)
     {
         bytes[i] = readableTwoHexCharsToUChar(stream[2*i],stream[2*i+1]);
     }
