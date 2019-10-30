@@ -178,7 +178,7 @@ static int help(struct sk_buff *skb,
     if (ctinfo != IP_CT_ESTABLISHED &&
             ctinfo != IP_CT_ESTABLISHED_REPLY)
     {
-        pr_debug("opc: Conntrackinfo = %u\n", ctinfo);
+        pr_debug("NewPacket\n");
         return NF_ACCEPT;
     }
 
@@ -191,8 +191,7 @@ static int help(struct sk_buff *skb,
     /* No data? */
     if (dataoff >= skb->len)
     {
-        pr_debug("opc: dataoff(%u) >= skblen(%u)\n", dataoff,
-                 skb->len);
+        pr_debug("NoData(%u)\n", skb->len);
         return NF_ACCEPT;
     }
     // tcp data length
@@ -218,7 +217,7 @@ static int help(struct sk_buff *skb,
         }
 
         /* Now if this ends in \n, update opc info. */
-        pr_debug("nf_conntrack_opc: wrong seq pos %s(%u) or %s(%u)\n",
+        pr_debug("wrong seq pos %s(%u) or %s(%u)\n",
                  ct_opc_info->seq_aft_nl_num[dir] > 0 ? "" : "(UNSET)",
                  ct_opc_info->seq_aft_nl[dir][0],
                  ct_opc_info->seq_aft_nl_num[dir] > 1 ? "" : "(UNSET)",
@@ -338,7 +337,7 @@ skip_nl_seq:
 //        ret = nf_nat_opc(skb, ctinfo, search[dir][i].opctype,
 //                         protoff, matchoff, matchlen, exp);
         ret = NF_ACCEPT;
-        printk("Should NAT.\n");
+        printk("OPC DA Should NAT\n");
     }
 
     else
@@ -389,7 +388,7 @@ static const struct nf_conntrack_expect_policy opc_exp_policy =
 
 static void __exit nf_conntrack_opc_fini(void)
 {
-    printk("unregister nf_conntrack_opc");
+    printk("unregister nf_conntrack_opc\n");
     nf_conntrack_helpers_unregister(opc, ports_c * 2);
     segments_fini();
     kfree(opc_buffer);
@@ -433,7 +432,7 @@ static int __init nf_conntrack_opc_init(void)
         segments_fini();
         return ret;
     }
-    printk("register nf_conntrack_opc");
+    printk("register nf_conntrack_opc\n");
     return 0;
 }
 
