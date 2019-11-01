@@ -38,18 +38,18 @@ int imitate_help(const char *ethernetAddr,unsigned int ethernetLen,
     unsigned int seq_h = ntohl( *(const unsigned int *)(ethernetAddr+tcpHeadStart+4));
     unsigned int ack = *(const unsigned int *)(ethernetAddr+tcpHeadStart+8);
 
-    unsigned short srcPort = ntohs( *(const unsigned short *)(ethernetAddr+tcpHeadStart+0));
-    unsigned short dstPort = ntohs( *(const unsigned short *)(ethernetAddr+tcpHeadStart+2));
+    unsigned short srcPort_h = ntohs( *(const unsigned short *)(ethernetAddr+tcpHeadStart+0));
+    unsigned short dstPort_h = ntohs( *(const unsigned short *)(ethernetAddr+tcpHeadStart+2));
 
     const char *fb_ptr = ethernetAddr + tcpDataStart;
     unsigned int datalen = ethernetLen - tcpDataStart;
 
-//    printf("(%d)->(%d)\n",srcPort,dstPort);
+//    printf("(%d)->(%d)\n",srcPort_h,dstPort_h);
 
     updateAndDeleteStore();
 
     found = 0;
-    if (isMatchDefaultPort(srcPort))
+    if (isMatchDefaultPort(srcPort_h))
     {
         found = tryDceRpcProtocolAndMatchDynamicPort(seq_h, ack, fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
     }

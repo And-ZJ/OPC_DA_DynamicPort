@@ -106,6 +106,18 @@ static void update_nl_seq(struct nf_conn *ct, u32 nl_seq,
     }
 }
 
+unsigned char isMatchDefaultPort(unsigned short port)
+{
+    int i=0;
+    for (;i<ports_c;++i)
+    {
+        if (ports[i] == port)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 void printConnInfo(
     const char *hint,
@@ -168,6 +180,7 @@ static int help(struct sk_buff *skb,
 
     unsigned int seq_h = 0;
     unsigned int ack = 0;
+    unsigned int srcPort_h = 0;
 
     typeof(nf_nat_opc_hook) nf_nat_opc;
 
@@ -246,7 +259,18 @@ skip_nl_seq:
 
     seq_h = ntohl(th->seq);
     ack = th->ack;
-    found = tryDceRpcProtocolAndMatchDynamicPort(seq_h, ack, fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
+    srcPort_h = ntohs(th->source);
+
+
+    updateAndDeleteStore();
+
+    found = 0;
+    if (isMatchDefaultPort(srcPort_h))
+    {
+        found = tryDceRpcProtocolAndMatchDynamicPort(seq_h, ack, fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
+    }
+
+    deleteAllMarkedStore();
 
     if (found == 1)
     {
