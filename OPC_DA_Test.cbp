@@ -46,10 +46,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="conntrak_opc_da/segments.h" />
-		<Unit filename="imitate.c">
+		<Unit filename="imitate_nf_conntrack_opc.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="imitate.h" />
+		<Unit filename="imitate_nf_conntrack_opc.h" />
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
