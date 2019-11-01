@@ -9,7 +9,7 @@
 #include "BytesTools.h"
 
 #include "AssertTools.h"
-#include "imitate.h"
+#include "imitate_nf_conntrack_opc.h"
 
 static int testNum = 1;
 

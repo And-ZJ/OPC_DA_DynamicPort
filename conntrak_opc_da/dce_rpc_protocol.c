@@ -275,12 +275,12 @@ unsigned char tryMatchDynamicPort(const char *dataAddr,unsigned int dataLen, uns
     unsigned int matchLen = 0;
     unsigned short dynamicPort = 0;
 
-    if (dataLen < start + 50)
+    if (dataLen < dceOffset + 50)
     {
         return 0;
     }
 
-    isMatchDynamicPortSuc = searchOpcDaDynamicPort( dataAddr, dataLen, start, &matchOff, &matchLen);
+    isMatchDynamicPortSuc = searchOpcDaDynamicPort( dataAddr, dataLen, dceOffset, &matchOff, &matchLen);
 
     if (!isMatchDynamicPortSuc)
     {

@@ -505,9 +505,6 @@ void test_segments_6()
     assert(segments_init());
 
     int rst = 0;
-    unsigned int seq_h = 0;
-    const char *tcpData = 0;
-    unsigned short dataLen = 0;
 
     /** Test the wrong pos */
     struct TcpTest t1 = {100, 0xaabbaabb,"abcd", 4, 8};
