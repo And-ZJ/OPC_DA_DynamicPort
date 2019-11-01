@@ -177,7 +177,7 @@ unsigned char searchOpcDaDynamicPort(const char *dataAddr,unsigned int dataLen,u
     unsigned int braceStart = 0;
     unsigned int braceEnd = 0;
     unsigned int i =0;
-    start = 356; // a skill to jump some bytes to search the dynamic port in current packet.
+    // start = 356; // a skill to jump some bytes to search the dynamic port in current packet.
 
     for(i = start; i < dataLen; i++)
     {
@@ -275,8 +275,12 @@ unsigned char tryMatchDynamicPort(const char *dataAddr,unsigned int dataLen, uns
     unsigned int matchLen = 0;
     unsigned short dynamicPort = 0;
 
+    if (dataLen < start + 50)
+    {
+        return 0;
+    }
 
-    isMatchDynamicPortSuc = searchOpcDaDynamicPort( dataAddr, dataLen, dceOffset, &matchOff, &matchLen);
+    isMatchDynamicPortSuc = searchOpcDaDynamicPort( dataAddr, dataLen, start, &matchOff, &matchLen);
 
     if (!isMatchDynamicPortSuc)
     {
@@ -323,7 +327,8 @@ unsigned char tryDceRpcProtocolAndMatchDynamicPort(unsigned int seq_h, unsigned 
     unsigned short assembledTcpDataLen = 0;
 
     rst = identityDceRpcHead(dataAddr, dataLen, dceOffset, &dceOffset,&dceRpcHdr);
-    updateAndDeleteStore();
+
+    isDcerpcPacket = 0;
     if (rst == 1)
     {
         isDcerpcPacket = 1;
@@ -359,22 +364,30 @@ unsigned char tryDceRpcProtocolAndMatchDynamicPort(unsigned int seq_h, unsigned 
 
     isFindUuid = searchDceRpcUuid(dataAddr,dataLen,dceOffset,&dceOffset,&uuidOffset);
 
-    if (!isFindUuid)
+    if (isFindUuid)
+    {
+        uuidType = identifyUuidType(dataAddr,dataLen,uuidOffset,dceRpcHdr);
+        if (uuidType == UUID_UNKNOWN_TYPE)
+        {
+            pr_debug("UUID unknown\n");
+            return 0;
+        }
+        printUuidType(uuidType);
+        if (uuidType == UUID_TYPE_IActivationPropertiesOut)
+        {
+            isGotDynamicPort = tryMatchDynamicPort(dataAddr,dataLen,356,&matchOff,&matchLen,&dynamicPort);
+        }
+    }
+    else
     {
         pr_debug("Find UUID failed\n");
-        return 0;
+        if (dceRpcHdr->type == 2)
+        {
+            pr_debug("Try IOXID\n");
+            isGotDynamicPort = tryMatchDynamicPort(dataAddr,dataLen,dceOffset,&matchOff,&matchLen,&dynamicPort);
+        }
     }
-    uuidType = identifyUuidType(dataAddr,dataLen,uuidOffset,dceRpcHdr);
-    if (uuidType == UUID_UNKNOWN_TYPE)
-    {
-        pr_debug("UUID unknown\n");
-        return 0;
-    }
-    printUuidType(uuidType);
-    if (uuidType == UUID_TYPE_IActivationPropertiesOut)
-    {
-        isGotDynamicPort = tryMatchDynamicPort(dataAddr,dataLen,dceOffset,&matchOff,&matchLen,&dynamicPort);
-    }
+
     if (isGotDynamicPort)
     {
         if (matchOff < seq_h - assembledHeadSeq_h)
@@ -388,7 +401,6 @@ unsigned char tryDceRpcProtocolAndMatchDynamicPort(unsigned int seq_h, unsigned 
 
         *matchLenPtr = matchLen;
         *dynamicPortPtr = dynamicPort;
-        deleteAllMarkedStore();
         return 1;
     }
     return 0;

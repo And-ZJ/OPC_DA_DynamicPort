@@ -6,6 +6,23 @@
 #define NF_ACCEPT 1
 #define NF_DROP 0
 
+#define MAX_PORTS 8
+static unsigned short ports[MAX_PORTS];
+static unsigned int ports_c;
+
+unsigned char isMatchDefaultPort(unsigned short port)
+{
+    int i=0;
+    for (;i<ports_c;++i)
+    {
+        if (ports[i] == port)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int imitate_help(const char *ethernetAddr,unsigned int ethernetLen,
                  unsigned int ipHeadStart,
                  unsigned int tcpHeadStart,
@@ -21,11 +38,25 @@ int imitate_help(const char *ethernetAddr,unsigned int ethernetLen,
     unsigned int seq_h = ntohl( *(const unsigned int *)(ethernetAddr+tcpHeadStart+4));
     unsigned int ack = *(const unsigned int *)(ethernetAddr+tcpHeadStart+8);
 
+    unsigned short srcPort = ntohs( *(const unsigned short *)(ethernetAddr+tcpHeadStart+0));
+    unsigned short dstPort = ntohs( *(const unsigned short *)(ethernetAddr+tcpHeadStart+2));
+
     const char *fb_ptr = ethernetAddr + tcpDataStart;
     unsigned int datalen = ethernetLen - tcpDataStart;
 
-    found = tryDceRpcProtocolAndMatchDynamicPort(seq_h, ack, fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
+//    printf("(%d)->(%d)\n",srcPort,dstPort);
 
+    updateAndDeleteStore();
+
+    found = 0;
+    if (isMatchDefaultPort(srcPort))
+    {
+        found = tryDceRpcProtocolAndMatchDynamicPort(seq_h, ack, fb_ptr, datalen, 0, &matchoff, &matchlen, &opcDaDynamicPort);
+    }
+
+    deleteAllMarkedStore();
+
+//    displayBytesInHexChars(fb_ptr+matchoff, matchlen);
 //    printf("match(%d,%d)\n",matchoff,matchlen);
 
     if (found == 1)
@@ -43,6 +74,8 @@ int imitate_help(const char *ethernetAddr,unsigned int ethernetLen,
 
 int imitate_init()
 {
+     if (ports_c == 0)
+        ports[ports_c++] = DCE_RPC_PORT;
     return segments_init();
 }
 
